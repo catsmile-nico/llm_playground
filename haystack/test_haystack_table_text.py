@@ -22,12 +22,12 @@ from haystack.nodes import TableReader, FARMReader, RouteDocuments, JoinAnswers
 
 document_index = "document"
 # document_store = ElasticsearchDocumentStore( host=host, index=document_index )
-document_store = FAISSDocumentStore(similarity="cosine", embedding_dim=12288, index=document_index)
+document_store = FAISSDocumentStore(similarity="cosine", embedding_dim=768, index=document_index)
 
 # %%
-doc_dir = "data/tutorial15"
-s3_url = "https://s3.eu-central-1.amazonaws.com/deepset.ai-farm-qa/datasets/documents/table_text_dataset.zip"
-fetch_archive_from_http(url=s3_url, output_dir=doc_dir)
+# doc_dir = "data/tutorial15"
+# s3_url = "https://s3.eu-central-1.amazonaws.com/deepset.ai-farm-qa/datasets/documents/table_text_dataset.zip"
+# fetch_archive_from_http(url=s3_url, output_dir=doc_dir)
 
 # %%
 def read_json_to_tables(filename):
@@ -43,7 +43,20 @@ def read_json_to_tables(filename):
 
     return processed_tables
 
-tables = read_json_to_tables(f"{doc_dir}/tables.json")
+def read_csv_to_tables(filename):
+    processed_tables = []
+    with open(filename) as file:
+        current_df = pd.read_csv(file, nrows=10000, index_col=False)
+        print(filename, current_df)
+        document = Document(content=current_df, content_type="table", id=os.path.splitext(os.path.basename(filename))[0])
+        processed_tables.append(document)
+
+    return processed_tables
+
+# tables = read_json_to_tables(f"{doc_dir}/tables.json")
+# https://insights.stackoverflow.com/survey
+tables = read_csv_to_tables("data/survey/survey_results_schema.csv")
+tables = read_csv_to_tables("data/survey/survey_results_public.csv")
 document_store.write_documents(tables, index=document_index)
 
 # Showing content field and meta field of one of the Documents of content_type 'table'
@@ -52,20 +65,21 @@ print("="*50)
 print(tables[0].meta)
 
 # %%
-# retriever = EmbeddingRetriever(document_store=document_store, embedding_model="deepset/all-mpnet-base-v2-table")
+retriever = EmbeddingRetriever(document_store=document_store, embedding_model="deepset/all-mpnet-base-v2-table")
 
-retriever = EmbeddingRetriever(document_store=document_store, embedding_model="davinci",model_format='openai',api_key=os.getenv("OPENAI_API_KEY"))
+# retriever = EmbeddingRetriever(document_store=document_store, embedding_model="davinci",model_format='openai',api_key=os.getenv("OPENAI_API_KEY"))
 document_store.update_embeddings(retriever=retriever)
-retrieved_tables = retriever.retrieve("Who won the Super Bowl?", top_k=5)
+retrieved_tables = retriever.retrieve("Explain this dataset", top_k=5)
 print(retrieved_tables[0].content)
 
 # %%
 reader = TableReader(model_name_or_path="google/tapas-base-finetuned-wtq", max_seq_len=512)
-table_doc = document_store.get_document_by_id("36964e90-3735-4ba1-8e6a-bec236e88bb2")
+table_doc = document_store.get_document_by_id("datasurveysurvey_results_schema.csv")
+# table_doc = document_store.get_document_by_id("36964e90-3735-4ba1-8e6a-bec236e88bb2")
 print(table_doc.content)
 
 # %%
-prediction = reader.predict(query="Who played Gregory House in the series House?", documents=[table_doc])
+prediction = reader.predict(query="Explain what is this dataset", documents=[table_doc])
 print_answers(prediction, details="all")
 print("="*50)
 print(f"Predicted answer: {prediction['answers'][0].answer}")
@@ -79,7 +93,7 @@ table_qa_pipeline = Pipeline()
 table_qa_pipeline.add_node(component=retriever, name="EmbeddingRetriever", inputs=["Query"])
 table_qa_pipeline.add_node(component=reader, name="TableReader", inputs=["EmbeddingRetriever"])
 # prediction = table_qa_pipeline.run("When was Guilty Gear Xrd : Sign released?", params={"top_k": 3})
-prediction = table_qa_pipeline.run("Who played Gregory House in the series House?", params={"top_k": 3})
+prediction = table_qa_pipeline.run("Explain what is this dataset", params={"top_k": 3})
 print_answers(prediction, details="minimum")
 print("="*50)
 print(f"Predicted answer: {prediction['answers'][0].answer}")
