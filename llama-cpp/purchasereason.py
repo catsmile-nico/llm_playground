@@ -4,7 +4,8 @@ import os, pytz, time
 from datetime import datetime
 from llama_cpp import Llama
 
-from prompts import LlamaClassificationConfig as LLMConfig, parseCategoryResponse
+from prompts import LlamaPurchaseReasonConfig as LLMConfig, parseCategoryResponse
+# from prompts import WizardLMPurchaseReasonConfig as LLMConfig, parseCategoryResponse
 from utils import write_csv_line
 
 
@@ -20,14 +21,13 @@ MODELS = {
 }
 
 DATA_FILE = "../data/fine_food_reviews_1k.csv"
-OUT_FILE = "./outdata2.csv"
+OUT_FILE = "./outdata_purchasereason.csv"
 TEXT_COLUMN = "Text"
 MAX_TOKENS = 200
 SAMPLE_SIZE = 100
 PROJECT_NAME = "amazonfoodreview"
 
-MODEL_PATH = "/home/catsmile/models/{model}.gguf".format(model=MODELS["LLAMA13B_Q4"])
-
+MODEL_PATH = "/home/catsmile/models/{model}.gguf".format(model=MODELS["LLAMA13B_Q5"])
 
 # ===============
 # READ DATA
@@ -45,7 +45,7 @@ LOG_DT = str(datetime.now().astimezone(pytz.timezone('Asia/Tokyo')).strftime('%y
 if not os.path.exists("./logs/"): os.mkdir("./logs/")
 
 # n_gpu_layers: 0 for no GPU, -1 to offload everything to GPU
-llm = Llama(model_path=MODEL_PATH, verbose=False, n_ctx=700, n_threads=10, n_gpu_layers=-1)
+llm = Llama(model_path=MODEL_PATH, verbose=False, n_ctx=700, n_threads=5, n_gpu_layers=-1)
 
 
 # ===============
@@ -84,4 +84,4 @@ test_df[['llama-cat','llama-subcat']] = test_df.apply(lambda x: chat_request(LLM
 # ===============
 # TEST 1 line
 # ===============
-# print(chat_request(LLMConfig("a great product, and convenient shipment", MAX_TOKENS)))
+# print(chat_request(LLMConfig("This has been the best tasting Stevia I have tried.  I also think this is a better value than some of the others.  I really like not having to open all the packets when I make a gallon of Tea.", MAX_TOKENS)))
