@@ -1,7 +1,7 @@
 import re, json
 from dataclasses import dataclass
 
-from utils import count_tokens, limit_tokens
+from utils import count_tokens, limit_tokens, extract_json_category
 
 @dataclass
 class MessageDict():
@@ -36,9 +36,8 @@ class LlamaConfig(PromptConfig):
 {{system_prompt}}
 <</SYS>>
 
-```
 {{user_msg}}
-``` [/INST]"""
+ [/INST]"""
 
     def __post_init__(self):
         self.init_prompt()
@@ -73,6 +72,7 @@ class OneshotMessageDict(MessageDict):
     sample_user_1: str
     sample_response_1: str
 
+@dataclass
 class ClassificationConfig(PromptConfig):
 
     token_limit: int
@@ -92,6 +92,7 @@ class ClassificationConfig(PromptConfig):
         )
         self.prompt = re.sub("{(.*?)}",lambda m:str(getattr(msg_items, m.group(1))), self.template)
 
+@dataclass
 class LlamaClassificationConfig(ClassificationConfig):
 # LLAMA2 CHAT GGUF
 
@@ -112,6 +113,7 @@ class LlamaClassificationConfig(ClassificationConfig):
 {{user_msg}}
 ``` [/INST]"""
 
+@dataclass
 class WizClassificationConfig(ClassificationConfig):
 # Wizard Mega GGUF
 
@@ -147,9 +149,15 @@ def parseCategoryResponse(prompt_config):
     first_index = response_args.find(prompt_config.cutoff) # find the first instance of cutoff
     second_index = response_args.find(prompt_config.cutoff, first_index+len(prompt_config.cutoff)) # then find thne next instance
     response_args = response_args[second_index + len(prompt_config.cutoff):]
-    response_args = response_args.replace("</s>","")
-    response_args = response_args.strip()
-    
+
+    response_json = extract_json_category(response_args)
+    if len(response_json) > 1: # We typically always want to skip the example json
+        response_args = response_json[1]
+    elif len(response_json) <= 0: # Return empty json string if nothing is found
+        response_args ='{ "CATEGORY": "None", "SUB-CATEGORY": ["None"]}'
+    else:
+        response_args = response_json[0] # Otherwise return the first list
+
     print("FILTERED RESPONSE")
     print(response_args)
     print("="*50)
@@ -177,9 +185,11 @@ Steps to follow:
 1. Read the Message delimited with ```
 2. List CLUES that will help you understand the sentiment of the INPUT message (i.e., keywords, phrases, contextual information, semantic relations, semantic meaning, tones, references) that support the intent of the INPUT.
 3. Deduce the diagnostic REASONING process from premises (i.e., CLUES, INPUTS) to determine the user's intended message clearly identifying GOOD or BAD imppression.
-4. Come up with generic categories, a main category and set of sub-categories that best describe the customer's impression of the product.
+4. Come up with a generic main category that best describe the customer's impression of the product.
+5. In the Sub-category, pick a label from this list [Satisfied, Unsatisfied] and add any other additional sub-category that best describe the customer's impression of the product.
 """
 
+@dataclass
 class PurchaseReasonConfig(PromptConfig):
     token_limit: int
     system_prompt = PURCHASE_REASON_SYSTEM_PROMPT
@@ -198,6 +208,7 @@ class PurchaseReasonConfig(PromptConfig):
         )
         self.prompt = re.sub("{(.*?)}",lambda m:str(getattr(msg_items, m.group(1))), self.template)
 
+@dataclass
 class LlamaPurchaseReasonConfig(PurchaseReasonConfig):
 # LLAMA2 CHAT GGUF
     
@@ -218,10 +229,10 @@ class LlamaPurchaseReasonConfig(PurchaseReasonConfig):
 {{user_msg}}
 ``` [/INST]"""
 
+@dataclass
 class WizardLMPurchaseReasonConfig(PurchaseReasonConfig):
 # WIZARDLM GGUF
 
-    system_prompt = PURCHASE_REASON_SYSTEM_PROMPT
     cutoff = "ASSISTANT:"
     stop = ["```","USER:", "ASSISTANT:"]
     template = f"""
@@ -239,4 +250,4 @@ USER:
 {{user_msg}}
 ``` 
 
-ASSISTANT: [/INST]"""
+ASSISTANT: """
